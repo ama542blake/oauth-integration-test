@@ -33,7 +33,19 @@ app.get('/', (req: Request, res: Response) => {
 // in this example, we return the tokens to the front end, but in practice we need to store this info
 app.put("/initiate", async (req: Request, res: Response) => {
   const client: OAuth2Client = await getAuthenticatedClient();
-  res.send(client);
+
+  if (client.credentials.id_token) {
+    client.verifyIdToken({ 
+      idToken: client.credentials.id_token,
+      audience: process.env.GOOGLE_CLIENT_ID
+    }).then((ticket) => {
+      // TODO: user ID will need to be stored in DB to identify users
+      console.log(`JWT ID token verification successful - ${ticket.getUserId()}`)
+      res.sendStatus(200);
+    }).catch(() => {
+      res.status(401).send({message: "ID token verification failed"});
+    });
+  }
 });
 
 app.listen(port, () => {

@@ -27,7 +27,7 @@ export default function getAuthenticatedClient(): Promise<OAuth2Client> {
             access_type: 'offline',
             // access to user profile and email address - can find list of scopes below:
             // https://developers.google.com/identity/protocols/oauth2/scopes
-            scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+            scope: 'openid',
         });
         
         // QUESTION: can we just set up a route for the Express server to listen for this?
