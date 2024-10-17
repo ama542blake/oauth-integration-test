@@ -85,7 +85,12 @@ export function verifyIdTokenAndSendJwt(client: OAuth2Client, res: Response) {
             // TODO: user ID will need to be stored in DB to identify users
             try {
                 const jwt = getJwtForClient(userId);
-                res.cookie('token', jwt).sendStatus(StatusCodes.OK);
+                res.cookie('token', jwt, {
+                    httpOnly: true,
+                    maxAge: 60*60*24, // 1 day
+                    secure: false, // TODO: set to true once operating on HTTPS
+                    sameSite: "lax"
+                }).sendStatus(StatusCodes.OK);
             } catch (e) {
                 res.status(StatusCodes.UNAUTHORIZED);
             }
