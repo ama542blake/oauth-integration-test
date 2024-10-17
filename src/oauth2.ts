@@ -39,6 +39,7 @@ export default function getAuthenticatedClient(): Promise<OAuth2Client> {
                     // acquire the code from the querystring, then close the web server
                     const queryString = new url.URL(req.url, process.env.GOOGLE_REDIRECT_URI).searchParams;
                     const code = queryString.get('code');
+                    // TODO: this opens a new tab with this message. How can we not do that?
                     res.end('Authentication successful! Please return to the console.');
                     server.destroy();
 
