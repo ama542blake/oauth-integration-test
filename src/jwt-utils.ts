@@ -1,12 +1,15 @@
 import jwt, { JwtPayload, TokenExpiredError } from 'jsonwebtoken';
-import {NextFunction, Request, RequestHandler, Response} from 'express';
+import { NextFunction, Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { ROUTE_INITIATE_OAUTH2, ROUTE_LOGIN } from './routers/route-constants';
-import { StatusCodes } from 'http-status-codes';
-
+import { SIGNING_METHOD } from './constants';
 
 dotenv.config();
-
+ 
+/**
+ * Generates and signs a JWT with a Google user ID as the payload.
+ * @param userId A Google user ID
+ * @returns A signed JWT whose payload is the supplied user ID
+ */
 export function getJwtForClient(userId: string): string {
     return jwt.sign({userId: userId}, process.env.JWT_SECRET!, { expiresIn: "1h" });
 }
@@ -22,25 +25,18 @@ export function getJwtForClient(userId: string): string {
  * @param next 
  */
 export function authenticate(req: Request, res: Response, next: NextFunction) {
+    // TODO: in error/invalid scenarios, should we be calling next(any argument), which indicates an issue during middleware execution
+
     if (req.cookies && req.cookies['token']) {
         const token = req.cookies['token'];
         try {
             const jwtPayload: JwtPayload = verifyJwt(token);
             if (jwtPayload.userId && req.body) {
                 req.body['userId'] = jwtPayload.userId;
-
-                next();
-                // return;
-            } else {
-                // res.status(StatusCodes.UNAUTHORIZED).send({message: "User ID could not be determined from JWT"});
-                // return;
             }
         } catch (error: any) {
             if (error instanceof TokenExpiredError) {
                 // TODO: token refresh logic
-                // res.status(StatusCodes.UNAUTHORIZED).send({message: "JWT expired"});
-            } else {
-                // res.status(StatusCodes.UNAUTHORIZED).send({message: "Invalid JWT", err: JSON.stringify(error)});
             }
         }
     }
@@ -48,10 +44,20 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     next();
 }
 
+/**
+ * Verifies that the JWT is valid, meaning it was signed by this server.
+ * @param token The URL encoded JWT
+ * @returns The decoded payload of the JWT, which will not contain the userId if JWT is invalid
+ */
 function verifyJwt(token: string): JwtPayload {
-    return jwt.verify(token, process.env.JWT_SECRET!, { algorithms: ["HS256"] }) as JwtPayload;
+    return jwt.verify(token, process.env.JWT_SECRET!, { algorithms: [SIGNING_METHOD] }) as JwtPayload;
 }
 
-export function getAuthenticatedUser(req: Request): string | undefined {
+/**
+ * Pulls the Google user ID out of the request body.
+ * @param req The request, whose body is expected to contain the user ID
+ * @returns The Google user ID if the user has been authenticated, undefined otherwise
+ */
+export function getAuthenticatedUserGoogleId(req: Request): string | undefined {
     return req.body?.userId;
 }

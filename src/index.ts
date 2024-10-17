@@ -1,24 +1,24 @@
 import express, {Express, Request, Response} from 'express';
 import dotenv from 'dotenv';
-import getAuthenticatedClient from './oauth2';
+import { getAuthenticatedClient, verifyIdTokenAndSendJwt } from './google-oauth2-utils';
 import { OAuth2Client } from 'google-auth-library';
-import { getAuthenticatedUser, getJwtForClient } from './jwt-utils';
+import { getAuthenticatedUserGoogleId } from './jwt-utils';
 import cookieParser from 'cookie-parser';
 import { authenticate } from './jwt-utils';
-import { ROUTE_HOME, ROUTE_INITIATE_OAUTH2, ROUTE_LOGIN } from './routers/route-constants';
-import { StatusCodes } from 'http-status-codes';
+import { ROUTE_HOME, ROUTE_INITIATE_OAUTH2, ROUTE_LOGIN } from './constants';
 
 dotenv.config();
-
-const app: Express = express();
+const protocol = process.env.PROTOCOL;
+const hostname = process.env.HOSTNAME;
 const port = process.env.PORT;
 
+const app: Express = express();
 configureMiddleware(app);
 app.set('view engine', 'ejs');
 configureRoutes(app);
 
 app.listen(port, () => {
-  console.log(`[server]: Server is running at http://localhost:${port}`);
+  console.log(`[server]: Server is running at ${protocol}://${hostname}:${port}`);
 });
 
 function configureMiddleware(app: Express) {
@@ -45,7 +45,7 @@ function configureMiddleware(app: Express) {
 function configureRoutes(app: Express) {
   // redirect to either home or login
   app.get("/", (req: Request, res: Response) => {
-    if (getAuthenticatedUser(req)) {
+    if (getAuthenticatedUserGoogleId(req)) {
       res.redirect(ROUTE_HOME);
     } else {
       res.redirect(ROUTE_LOGIN);
@@ -54,7 +54,7 @@ function configureRoutes(app: Express) {
 
   // renders the login page (if user not authenticated)
   app.get(ROUTE_LOGIN, (req: Request, res: Response) => {
-    if (getAuthenticatedUser(req)) {
+    if (getAuthenticatedUserGoogleId(req)) {
       // user is already logged in, so take them home
       res.redirect(ROUTE_HOME);
     } else {
@@ -64,7 +64,7 @@ function configureRoutes(app: Express) {
 
   // renders the home page (if user is authenticated)
   app.get(ROUTE_HOME, (req: Request, res: Response) => {
-    if (getAuthenticatedUser(req)) {
+    if (getAuthenticatedUserGoogleId(req)) {
       res.render('home');
     } else {
       res.redirect(ROUTE_LOGIN);
@@ -74,27 +74,6 @@ function configureRoutes(app: Express) {
   // initiate the OAuth process
   app.post(ROUTE_INITIATE_OAUTH2, async (req: Request, res: Response) => {
     const client: OAuth2Client = await getAuthenticatedClient();
-
-    if (client.credentials.id_token) {
-      client.verifyIdToken({
-        idToken: client.credentials.id_token,
-        audience: process.env.GOOGLE_CLIENT_ID
-      }).then((ticket) => {
-        const userId: string = ticket.getUserId() ?? '';
-        if (userId === '') {
-          res.status(StatusCodes.UNAUTHORIZED);
-        }
-
-        // TODO: user ID will need to be stored in DB to identify users
-        try {
-          const jwt = getJwtForClient(userId);
-          res.cookie('token', jwt).sendStatus(StatusCodes.OK);
-        } catch (e) {
-          res.status(StatusCodes.UNAUTHORIZED);
-        }
-      }).catch(() => {
-        res.status(StatusCodes.UNAUTHORIZED);
-      });
-    }
+    verifyIdTokenAndSendJwt(client, res);
   });
 }
