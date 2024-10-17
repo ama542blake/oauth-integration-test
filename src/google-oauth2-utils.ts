@@ -1,11 +1,14 @@
 // following this example: https://cloud.google.com/nodejs/docs/reference/google-auth-library/latest#oauth2
 
 import { OAuth2Client } from 'google-auth-library';
+import { StatusCodes } from 'http-status-codes';
+import { Response } from 'express';
 import url from 'url';
 import open from 'open';
 import dotenv from 'dotenv';
 import http from 'http';
 import destroyer from 'server-destroy';
+import { getJwtForClient } from './jwt-utils';
 
 dotenv.config();
 
@@ -13,7 +16,7 @@ dotenv.config();
 * Create a new OAuth2Client and go through the OAuth2 flow.
 * Return the full client with credentials to the callback.
 */
-export default function getAuthenticatedClient(): Promise<OAuth2Client> {
+export function getAuthenticatedClient(): Promise<OAuth2Client> {
     return new Promise((resolve, reject) => {
         // create an oAuth client to authorize the API call
         const oAuth2Client = new OAuth2Client(
@@ -30,7 +33,7 @@ export default function getAuthenticatedClient(): Promise<OAuth2Client> {
             scope: 'openid',
         });
         
-        // QUESTION: can we just set up a route for the Express server to listen for this?
+        // TODO: can we just set up a route for the Express server to listen for this?
         // open an http server to accept the oauth callback
         const server = http.createServer(async (req, res) => {
             try {
@@ -65,4 +68,29 @@ export default function getAuthenticatedClient(): Promise<OAuth2Client> {
 
         destroyer(server);
     });
+}
+
+
+export function verifyIdTokenAndSendJwt(client: OAuth2Client, res: Response) {
+    if (client.credentials.id_token) {
+        client.verifyIdToken({
+            idToken: client.credentials.id_token,
+            audience: process.env.GOOGLE_CLIENT_ID
+        }).then((ticket) => {
+            const userId: string = ticket.getUserId() ?? '';
+            if (userId === '') {
+                res.status(StatusCodes.UNAUTHORIZED);
+            }
+
+            // TODO: user ID will need to be stored in DB to identify users
+            try {
+                const jwt = getJwtForClient(userId);
+                res.cookie('token', jwt).sendStatus(StatusCodes.OK);
+            } catch (e) {
+                res.status(StatusCodes.UNAUTHORIZED);
+            }
+        }).catch(() => {
+            res.status(StatusCodes.UNAUTHORIZED);
+        });
+    }
 }
