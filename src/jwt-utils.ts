@@ -1,17 +1,21 @@
 import jwt, { JwtPayload, TokenExpiredError } from 'jsonwebtoken';
 import { NextFunction, Request, Response } from 'express';
 import dotenv from 'dotenv';
-import { SIGNING_METHOD } from './constants';
+import { JWT_SIGNING_METHOD } from './constants';
 
 dotenv.config();
- 
+
 /**
  * Generates and signs a JWT with a Google user ID as the payload.
  * @param userId A Google user ID
  * @returns A signed JWT whose payload is the supplied user ID
  */
 export function getJwtForClient(userId: string): string {
-    return jwt.sign({userId: userId}, process.env.JWT_SECRET!, { expiresIn: "1h" });
+    return jwt.sign(
+        { userId: userId },
+        process.env.JWT_PRIVATE_KEY!,
+        { expiresIn: "1h", algorithm: JWT_SIGNING_METHOD }
+    );
 }
 
 /**
@@ -50,7 +54,7 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
  * @returns The decoded payload of the JWT, which will not contain the userId if JWT is invalid
  */
 function verifyJwt(token: string): JwtPayload {
-    return jwt.verify(token, process.env.JWT_SECRET!, { algorithms: [SIGNING_METHOD] }) as JwtPayload;
+    return jwt.verify(token, process.env.JWT_PRIVATE_KEY!, { algorithms: [JWT_SIGNING_METHOD] }) as JwtPayload;
 }
 
 /**
