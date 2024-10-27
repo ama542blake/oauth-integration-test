@@ -1,14 +1,11 @@
 // following this example: https://cloud.google.com/nodejs/docs/reference/google-auth-library/latest#oauth2
 
 import { OAuth2Client } from 'google-auth-library';
-import { StatusCodes } from 'http-status-codes';
-import { Response } from 'express';
 import url from 'url';
 import open from 'open';
 import dotenv from 'dotenv';
 import http from 'http';
 import destroyer from 'server-destroy';
-import { getJwtForClient } from './jwt-utils';
 
 dotenv.config();
 
@@ -70,32 +67,22 @@ export function getAuthenticatedClient(): Promise<OAuth2Client> {
     });
 }
 
+/**
+ * Verifies the credentials on the OAuth2 client instance.
+ * @param client The OAuth2 client returned from Google after OAuth process is completed
+ * @returns The userId if user was successfully validated, null otherwise
+ */
+export async function verifyIdToken(client: OAuth2Client): Promise<string | null> {
+    let userId: string | null = null;
 
-export function verifyIdTokenAndSendJwt(client: OAuth2Client, res: Response) {
     if (client.credentials.id_token) {
-        client.verifyIdToken({
+        await client.verifyIdToken({
             idToken: client.credentials.id_token,
             audience: process.env.GOOGLE_CLIENT_ID
         }).then((ticket) => {
-            const userId: string = ticket.getUserId() ?? '';
-            if (userId === '') {
-                res.status(StatusCodes.UNAUTHORIZED);
-            }
-
-            // TODO: user ID will need to be stored in DB to identify users
-            try {
-                const jwt = getJwtForClient(userId);
-                res.cookie('token', jwt, {
-                    httpOnly: true,
-                    maxAge: 60*60*24, // 1 day
-                    secure: false, // TODO: set to true once operating on HTTPS
-                    sameSite: "lax"
-                }).sendStatus(StatusCodes.OK);
-            } catch (e) {
-                res.status(StatusCodes.UNAUTHORIZED);
-            }
-        }).catch(() => {
-            res.status(StatusCodes.UNAUTHORIZED);
+            userId = ticket.getUserId() ?? '';
         });
     }
+
+    return userId;
 }
